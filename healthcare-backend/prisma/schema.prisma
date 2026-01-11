@@ -26,9 +26,93 @@ model Patient {
   since     String
   status    PatientStatus @default(ADMITTED)
   createdAt DateTime      @default(now())
+
+  // Optional extended hospital fields
+  pid        String?  @unique
+  fullName   String?
+  gender     String?
+  phone      String?
+  address    String?
+  bloodGroup String?
+  allergies  String?
+  weight     Int?
+
+  // Relations
+  visits   Visit[]
+  surgeries Surgery[]
 }
 
 enum PatientStatus {
   ADMITTED
   DISCHARGED
+}
+
+// Employee roles in hospital
+enum Role {
+  ADMIN
+  DOCTOR
+  NURSE
+  WARDBOY
+}
+
+// Visit status for patient visits/admissions
+enum VisitStatus {
+  CHECKUP_PENDING
+  ADMITTED
+  DISCHARGED
+  SURGERY_SCHEDULED
+  IN_SURGERY
+  UNDER_OBSERVATION
+}
+
+// Types of wards
+enum WardType {
+  GENERAL
+  ICU
+  PRIVATE
+}
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  employeeId String   @unique
+  password   String
+  role       Role
+  fullName   String
+  contact    String
+  department String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  visits    Visit[]
+  surgeries Surgery[]
+}
+
+model Visit {
+  id           Int          @id @default(autoincrement())
+  patientId    Int
+  doctorId     Int
+  visitReason  String
+  status       VisitStatus  @default(CHECKUP_PENDING)
+  assignedWard WardType?
+  diagnosis    String?
+  prescription String?
+  notes        String?
+  visitDate    DateTime     @default(now())
+  dischargedAt DateTime?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Employee @relation(fields: [doctorId], references: [id])
+}
+
+model Surgery {
+  id          Int      @id @default(autoincrement())
+  patientId   Int
+  doctorId    Int
+  surgeryType String
+  scheduledFor DateTime
+  status      String
+  createdAt   DateTime @default(now())
+
+  patient Patient  @relation(fields: [patientId], references: [id])
+  doctor  Employee @relation(fields: [doctorId], references: [id])
 }

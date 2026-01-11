@@ -2,14 +2,25 @@ import { PatientStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 
 export interface PatientInput {
-  name: string;
-  age: number;
-  issue: string;
-  since: string;
-  status?: PatientStatus;
+  name: string
+  age: number
+  issue: string
+  since: string
+  status?: PatientStatus
+  fullName?: string
+  gender?: string
+  phone?: string
+  address?: string
+  bloodGroup?: string
+  allergies?: string
+  weight?: number
 }
 
 export async function createPatient(data: PatientInput) {
+  // Generate a simple PID
+  const count = await prisma.patient.count()
+  const pid = `P-${String(count + 1001).padStart(4, '0')}`
+
   return prisma.patient.create({
     data: {
       name: data.name,
@@ -17,8 +28,16 @@ export async function createPatient(data: PatientInput) {
       issue: data.issue,
       since: data.since,
       status: data.status ?? PatientStatus.ADMITTED,
+      pid,
+      fullName: data.fullName || data.name,
+      gender: data.gender,
+      phone: data.phone,
+      address: data.address,
+      bloodGroup: data.bloodGroup,
+      allergies: data.allergies,
+      weight: data.weight
     },
-  });
+  })
 }
 
 export async function listPatients() {

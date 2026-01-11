@@ -1,17 +1,21 @@
-import { Router } from "express";
+import { Router } from "express"
 import {
   createPatientHandler,
   deletePatientHandler,
   listPatientsHandler,
   togglePatientStatusHandler,
-} from "../controllers/patientController.js";
-import { verifyToken } from "../middlewares/verifyToken.js";
+  getPatientByIdHandler,
+  searchPatientHandler,
+} from "../controllers/patientController.js"
+import { verifyToken } from "../middlewares/verifyToken.js"
 
-const router = Router();
+const router = Router()
 
-router.post("/patients", verifyToken, createPatientHandler);
-router.get("/patients", verifyToken, listPatientsHandler);
-router.put("/patients/:id", verifyToken, togglePatientStatusHandler);
-router.delete("/patients/:id", verifyToken, deletePatientHandler);
+router.post("/patients", createPatientHandler)
+router.get("/patients", listPatientsHandler)
+router.get("/patients/search", searchPatientHandler)
+router.get("/patients/:id", getPatientByIdHandler)
+router.put("/patients/:id", togglePatientStatusHandler)
+router.delete("/patients/:id", deletePatientHandler)
 
-export default router;
+export default router
