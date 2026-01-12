@@ -12,9 +12,9 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const token = header.split(" ")[1];
+  const token = header.split(" ")[1]!;
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: number; email: string };
+    const decoded = jwt.verify(token, env.JWT_SECRET) as unknown as { userId: number; email: string };
     req.user = decoded;
     return next();
   } catch (err) {

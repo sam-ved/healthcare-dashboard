@@ -1,10 +1,13 @@
 import { Router } from 'express'
-import { getVisitsByDoctor, createVisit, updateVisit } from '../controllers/visitController.js'
+import { getVisitsByDoctor, createVisit, updateVisit, getQueueByDoctor, getVisitById } from '../controllers/visitController.js'
 
 const router = Router()
 
+router.get('/queue/:doctorId', getQueueByDoctor)
+router.get('/queue/:doctorId', getQueueByDoctor)
 router.get('/doctor/:doctorId', getVisitsByDoctor)
+router.get('/:id', getVisitById)
 router.post('/', createVisit)
-router.put('/:id', updateVisit)
+router.patch('/:id', updateVisit)
 
 export default router

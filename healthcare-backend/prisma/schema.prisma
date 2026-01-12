@@ -24,25 +24,42 @@ model Patient {
   age       Int
   issue     String
   since     String
-  status    PatientStatus @default(ADMITTED)
+  status    WorkflowStatus @default(WAITING)
   createdAt DateTime      @default(now())
 
-  // Optional extended hospital fields
-  pid        String?  @unique
-  fullName   String?
-  gender     String?
-  phone      String?
-  address    String?
-  bloodGroup String?
+  // Extended hospital fields
+  pid        String   @unique
+  fullName   String
+  gender     String
+  dob        DateTime
+  phone      String   @unique
+  address    String
+  bloodGroup String
   allergies  String?
-  weight     Int?
+  weight     Int      // Mandatory
+  height     Int      // Mandatory (in cm)
+
+  // Workflow fields
+  assignedDoctorId       Int?
+  prescription           String?
+  isSurgeryRequired      Boolean @default(false)
+  isAdmissionRecommended Boolean @default(false)
 
   // Relations
-  visits   Visit[]
-  surgeries Surgery[]
+  assignedDoctor Employee? @relation("PatientToDoctor", fields: [assignedDoctorId], references: [id])
+  visits         Visit[]
+  surgeries      Surgery[]
 }
 
 enum PatientStatus {
+  ADMITTED
+  DISCHARGED
+}
+
+// Workflow status for the 3-tier system
+enum WorkflowStatus {
+  WAITING
+  CONSULTED
   ADMITTED
   DISCHARGED
 }
@@ -53,6 +70,7 @@ enum Role {
   DOCTOR
   NURSE
   WARDBOY
+  RECEPTIONIST
 }
 
 // Visit status for patient visits/admissions
@@ -74,17 +92,20 @@ enum WardType {
 
 model Employee {
   id         Int      @id @default(autoincrement())
-  employeeId String   @unique
+  employeeId String   @unique @default(uuid())
   password   String
   role       Role
   fullName   String
-  contact    String
+  mobile     String   @unique
+  email      String   @unique
+  available  Boolean  @default(true)
   department String?
   createdAt  DateTime @default(now())
 
   // Relations
-  visits    Visit[]
-  surgeries Surgery[]
+  visits              Visit[]
+  surgeries           Surgery[]
+  assignedPatients    Patient[] @relation("PatientToDoctor")
 }
 
 model Visit {

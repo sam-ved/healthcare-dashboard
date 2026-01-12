@@ -8,6 +8,7 @@ import employeeRoutes from "./routes/employeeRoutes.js"
 import visitRoutes from "./routes/visitRoutes.js"
 import surgeryRoutes from "./routes/surgeryRoutes.js"
 import statsRoutes from "./routes/statsRoutes.js"
+import workflowRoutes from "./routes/workflowRoutes.js"
 
 const app = express()
 
@@ -17,6 +18,7 @@ app.use(express.json())
 
 app.use("/auth", authRoutes)
 app.use("/auth", employeeRoutes)
+app.use("/patients", workflowRoutes)
 app.use("/", patientRoutes)
 app.use("/visits", visitRoutes)
 app.use("/surgeries", surgeryRoutes)

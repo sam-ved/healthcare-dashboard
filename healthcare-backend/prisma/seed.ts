@@ -1,4 +1,4 @@
-import { PrismaClient, Role, VisitStatus, WardType } from '@prisma/client'
+import { PrismaClient, Role, VisitStatus, WardType, WorkflowStatus } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
@@ -21,7 +21,8 @@ async function main() {
       password: hashedPassword,
       role: Role.ADMIN,
       fullName: 'Super Admin',
-      contact: '9999999999',
+      mobile: '9999999999',
+      email: 'admin@hospital.com',
     },
   })
 
@@ -31,7 +32,8 @@ async function main() {
       password: hashedPassword,
       role: Role.DOCTOR,
       fullName: 'Dr. Rajesh Koothrappali',
-      contact: '9876543210',
+      mobile: '9876543210',
+      email: 'rajesh@hospital.com',
       department: 'Cardiology',
     },
   })
@@ -42,7 +44,8 @@ async function main() {
       password: hashedPassword,
       role: Role.DOCTOR,
       fullName: 'Dr. Sheldon Cooper',
-      contact: '9876543211',
+      mobile: '9876543211',
+      email: 'sheldon@hospital.com',
       department: 'Orthopedics',
     },
   })
@@ -53,7 +56,8 @@ async function main() {
       password: hashedPassword,
       role: Role.NURSE,
       fullName: 'Nurse Joy',
-      contact: '9876543222',
+      mobile: '9876543222',
+      email: 'joy@hospital.com',
     },
   })
 
@@ -63,7 +67,8 @@ async function main() {
       password: hashedPassword,
       role: Role.NURSE,
       fullName: 'Nurse Mary',
-      contact: '9876543223',
+      mobile: '9876543223',
+      email: 'mary@hospital.com',
     },
   })
 
@@ -73,13 +78,25 @@ async function main() {
       password: hashedPassword,
       role: Role.WARDBOY,
       fullName: 'Ramu Kaka',
-      contact: '9876543224',
+      mobile: '9876543224',
+      email: 'ramu@hospital.com',
+    },
+  })
+
+  const receptionist = await prisma.employee.create({
+    data: {
+      employeeId: 'REC-001',
+      password: hashedPassword,
+      role: Role.RECEPTIONIST, // Updated Role
+      fullName: 'Receptionist Sharma',
+      mobile: '9876543225',
+      email: 'sharma@hospital.com',
     },
   })
 
   console.log('✅ Employees created')
 
-  // 3. Create Patients
+  // 3. Create Patients with new workflow fields
   const p1 = await prisma.patient.create({
     data: {
       name: 'Amit Sharma',
@@ -89,20 +106,15 @@ async function main() {
       pid: 'P-1001',
       fullName: 'Amit Sharma',
       gender: 'Male',
+      dob: new Date('1979-01-01'),
       phone: '9876500001',
       address: '123 Main St, Pune',
       bloodGroup: 'O+',
+      weight: 75,
+      height: 175,
       allergies: 'Peanuts',
-      visits: {
-        create: {
-          doctorId: docCardio.id,
-          visitReason: 'Chest Pain',
-          status: VisitStatus.ADMITTED,
-          assignedWard: WardType.GENERAL,
-          diagnosis: 'Mild Cardiac Arrest',
-          visitDate: new Date(),
-        },
-      },
+      status: WorkflowStatus.WAITING,
+      assignedDoctorId: docCardio.id,
     },
   })
 
@@ -115,19 +127,17 @@ async function main() {
       pid: 'P-1002',
       fullName: 'Priya Verma',
       gender: 'Female',
+      dob: new Date('1996-05-15'),
       phone: '9876500002',
       address: '456 College Rd, Mumbai',
       bloodGroup: 'B+',
       weight: 60,
-      visits: {
-        create: {
-          doctorId: docOrtho.id,
-          visitReason: 'Knee Injury',
-          status: VisitStatus.SURGERY_SCHEDULED,
-          diagnosis: 'ACL Tear',
-          notes: 'Surgery scheduled for next Tuesday',
-        },
-      },
+      height: 165,
+      status: WorkflowStatus.CONSULTED,
+      assignedDoctorId: docOrtho.id,
+      prescription: 'Rest and Ice therapy',
+      isSurgeryRequired: true,
+      isAdmissionRecommended: true,
     },
   })
 
@@ -140,19 +150,15 @@ async function main() {
       pid: 'P-1003',
       fullName: 'Rahul Dravid',
       gender: 'Male',
+      dob: new Date('1974-01-11'),
       phone: '9876500003',
       address: '789 Wall St, Bangalore',
       bloodGroup: 'AB+',
-      visits: {
-        create: {
-          doctorId: docCardio.id,
-          visitReason: 'Regular Checkup',
-          status: VisitStatus.DISCHARGED,
-          diagnosis: 'Healthy',
-          prescription: 'Vitamins A and D',
-          dischargedAt: new Date(),
-        },
-      },
+      weight: 80,
+      height: 180,
+      status: WorkflowStatus.DISCHARGED,
+      assignedDoctorId: docCardio.id,
+      prescription: 'Vitamins A and D',
     },
   })
 
@@ -165,18 +171,17 @@ async function main() {
       pid: 'P-1004',
       fullName: 'Neha Kulkarni',
       gender: 'Female',
+      dob: new Date('1991-08-20'),
       phone: '9876500004',
       address: '22 FC Road, Pune',
       bloodGroup: 'A+',
+      weight: 55,
+      height: 160,
       allergies: 'Penicillin',
-      visits: {
-        create: {
-          doctorId: docCardio.id,
-          visitReason: 'Palpitations',
-          status: VisitStatus.CHECKUP_PENDING,
-          diagnosis: 'To be evaluated',
-        },
-      },
+      status: WorkflowStatus.CONSULTED,
+      assignedDoctorId: docCardio.id,
+      prescription: 'Beta blockers',
+      isAdmissionRecommended: true,
     },
   })
 
@@ -189,34 +194,21 @@ async function main() {
       pid: 'P-1005',
       fullName: 'Suresh Raina',
       gender: 'Male',
+      dob: new Date('1985-11-27'),
       phone: '9876500005',
       address: 'MG Road, Delhi',
       bloodGroup: 'O-',
+      weight: 78,
+      height: 172,
       allergies: 'None',
-      visits: {
-        create: {
-          doctorId: docOrtho.id,
-          visitReason: 'Back Pain',
-          status: VisitStatus.ADMITTED,
-          assignedWard: WardType.GENERAL,
-          diagnosis: 'Lumbar strain',
-        },
-      },
+      status: WorkflowStatus.ADMITTED,
+      assignedDoctorId: docOrtho.id,
+      prescription: 'Physical therapy',
+      isAdmissionRecommended: false,
     },
   })
 
-  // Create a Surgery for Patient 2
-  await prisma.surgery.create({
-    data: {
-      patientId: p2.id,
-      doctorId: docOrtho.id,
-      surgeryType: 'ACL Reconstruction',
-      scheduledFor: new Date(new Date().setDate(new Date().getDate() + 2)), // 2 days from now
-      status: 'SCHEDULED',
-    },
-  })
-
-  console.log('✅ Patients and Visits created')
+  console.log('✅ Patients created with workflow fields')
   console.log('🚀 Seed completed successfully!')
 }
 

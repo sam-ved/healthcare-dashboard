@@ -6,7 +6,12 @@ const role = getUserRole() as 'NURSE' | 'WARDBOY'
 </script>
 
 <template>
-  <Sidebar :role="role">
-    <router-view />
-  </Sidebar>
+  <div class="flex h-screen bg-slate-50 overflow-hidden">
+    <Sidebar :role="role" />
+    <main class="flex-1 overflow-auto">
+      <div class="p-8 max-w-7xl mx-auto min-h-full">
+         <router-view />
+      </div>
+    </main>
+  </div>
 </template>

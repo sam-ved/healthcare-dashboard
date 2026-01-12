@@ -1,7 +1,7 @@
 export interface Employee {
   id: number
   employeeId: string
-  role: 'ADMIN' | 'DOCTOR' | 'NURSE' | 'WARDBOY'
+  role: 'ADMIN' | 'DOCTOR' | 'NURSE' | 'WARDBOY' | 'RECEPTIONIST'
   fullName: string
   contact: string
   department?: string
@@ -83,4 +83,26 @@ export interface Analytics {
   patientInflow: { date: string; count: number }[]
   diseaseHeatmap: { disease: string; count: number }[]
   staffStatus: { name: string; status: 'Available' | 'Busy' }[]
+}
+
+export interface RegisterEmployeeData {
+  fullName: string
+  email: string
+  mobile: string
+  password: string
+  role: 'ADMIN' | 'DOCTOR' | 'NURSE' | 'WARDBOY' | 'RECEPTIONIST'
+  department?: string
+}
+
+export interface ReceptionDashboardData {
+  availableDoctors: Employee[]
+  doctorsOnLeave: Employee[]
+  appointmentsToday: (Visit & { patient: Patient; doctor: Employee })[]
+  surgeriesToday: (Surgery & { patient: Patient; doctor: Employee })[]
+}
+
+export interface DoctorStats {
+  patientsWaiting: number
+  surgeriesToday: number
+  consultationsDone: number
 }

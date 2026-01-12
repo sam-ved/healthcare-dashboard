@@ -71,3 +71,115 @@ export async function getAnalytics(req: Request, res: Response) {
     res.status(500).json({ message: 'Failed to fetch analytics' })
   }
 }
+
+// Get reception dashboard data
+export async function getReceptionDashboard(req: Request, res: Response) {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 1. Available Doctors & On Leave
+    const doctors = await prisma.employee.findMany({
+      where: { role: 'DOCTOR' },
+      select: { id: true, fullName: true, department: true, available: true }
+    });
+    
+    const availableDoctors = doctors.filter(d => d.available);
+    const doctorsOnLeave = doctors.filter(d => !d.available);
+
+    // 2. Today's Appointments (Visits)
+    const appointmentsToday = await prisma.visit.findMany({
+      where: {
+        visitDate: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      include: {
+        patient: { select: { fullName: true, pid: true } },
+        doctor: { select: { fullName: true } }
+      }
+    });
+
+    // 3. Scheduled Surgeries
+    const surgeriesToday = await prisma.surgery.findMany({
+      where: {
+        scheduledFor: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      include: {
+        patient: { select: { fullName: true, pid: true } },
+        doctor: { select: { fullName: true } }
+      }
+    });
+
+    res.json({
+      availableDoctors,
+      doctorsOnLeave,
+      appointmentsToday,
+      surgeriesToday
+    });
+  } catch (error) {
+    console.error('Get reception dashboard error:', error);
+    res.status(500).json({ message: 'Failed to fetch reception dashboard data' });
+  }
+}
+
+// Get doctor dashboard stats
+export async function getDoctorStats(req: Request, res: Response) {
+  try {
+    const doctorId = parseInt(req.params.id || '')
+    if (isNaN(doctorId)) {
+       return res.status(400).json({ message: 'Invalid doctor ID' })
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 1. Patients Waiting (Queue)
+    const patientsWaiting = await prisma.visit.count({
+      where: {
+        doctorId,
+        status: { in: ['CHECKUP_PENDING', 'ADMITTED', 'UNDER_OBSERVATION'] }
+      }
+    });
+
+    // 2. Today's Surgeries
+    const surgeriesToday = await prisma.surgery.count({
+      where: {
+        doctorId,
+        scheduledFor: {
+          gte: today,
+          lt: tomorrow
+        }
+      }
+    });
+
+    // 3. Consultations Done Today
+    const consultationsDone = await prisma.visit.count({
+      where: {
+        doctorId,
+        status: 'DISCHARGED',
+        visitDate: {
+          gte: today,
+          lt: tomorrow
+        }
+      }
+    });
+
+    res.json({
+      patientsWaiting,
+      surgeriesToday,
+      consultationsDone
+    });
+  } catch (error) {
+    console.error('Get doctor stats error:', error)
+    res.status(500).json({ message: 'Failed to fetch doctor stats' })
+  }
+}

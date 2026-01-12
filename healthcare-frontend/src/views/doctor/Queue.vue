@@ -1,130 +1,103 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { getVisitsByDoctor } from '@/api'
-import { getEmployee } from '@/utils/auth'
-import { ClipboardList, Clock, ChevronRight } from 'lucide-vue-next'
-import Badge from '@/components/Badge.vue'
-import Avatar from '@/components/Avatar.vue'
-import type { Visit } from '@/types'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { 
+  ClipboardList, 
+  Clock, 
+  ArrowRight,
+  AlertCircle 
+} from 'lucide-vue-next';
+import { getDoctorQueue } from '@/api';
+import { getEmployee } from '@/utils/auth';
+import StatusBadge from '@/components/StatusBadge.vue'; // Ensure you have this component
 
-const router = useRouter()
-const visits = ref<Visit[]>([])
-const loading = ref(true)
-
-const employee = getEmployee()
+const router = useRouter();
+const visits = ref<any[]>([]);
+const loading = ref(true);
+const employee = getEmployee();
 
 onMounted(async () => {
-  if (!employee) return
-  
-  try {
-    visits.value = await getVisitsByDoctor(employee.id)
-  } catch (err) {
-    console.error('Failed to load visits:', err)
-  } finally {
-    loading.value = false
+  if (employee?.id) {
+    try {
+      visits.value = await getDoctorQueue(employee.id);
+    } catch (err) {
+      console.error('Failed to fetch queue', err);
+    } finally {
+      loading.value = false;
+    }
   }
-})
+});
 
-const pendingVisits = computed(() => 
-  visits.value.filter((v: Visit) => v.status === 'CHECKUP_PENDING' || v.status === 'ADMITTED')
-)
-
-const openPatient = (visit: Visit) => {
-  router.push(`/doctor/patient/${visit.patientId}`)
-}
-
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'warning' | 'info' | 'success' | 'danger'> = {
-    'CHECKUP_PENDING': 'warning',
-    'ADMITTED': 'info',
-    'DISCHARGED': 'success',
-    'SURGERY_SCHEDULED': 'danger'
-  }
-  return variants[status] || 'neutral'
-}
-
-const formatTime = (date: string) => {
-  return new Date(date).toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  })
-}
+const handleExamine = (patientId: number) => {
+  router.push(`/doctor/patient/${patientId}`);
+};
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="animate-fade-in">
-      <h1 class="text-4xl font-bold text-slate-900 mb-2">Patient Queue</h1>
-      <p class="text-lg text-slate-600">{{ pendingVisits.length }} patients awaiting examination</p>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="loading" class="space-y-3">
-      <div v-for="i in 3" :key="i" class="bg-white rounded-xl border border-slate-200 p-6 animate-pulse">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 bg-slate-200 rounded-full"></div>
-          <div class="flex-1 space-y-2">
-            <div class="h-4 bg-slate-200 rounded w-1/3"></div>
-            <div class="h-3 bg-slate-200 rounded w-1/2"></div>
-          </div>
-        </div>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Patient Queue</h1>
+        <p class="text-slate-500">Upcoming appointments and checkups</p>
+      </div>
+      <div class="bg-white px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600">
+        {{ new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }) }}
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div 
-      v-else-if="pendingVisits.length === 0" 
-      class="bg-white rounded-2xl border border-slate-200 shadow-lg p-12"
-    >
-      <div class="text-center">
-        <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center">
-          <ClipboardList class="w-10 h-10 text-emerald-600" />
-        </div>
-        <h3 class="text-2xl font-bold text-slate-900 mb-2">All Caught Up!</h3>
-        <p class="text-slate-600">No patients in queue right now</p>
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div v-if="loading" class="p-12 text-center text-slate-500">
+        Loading your schedule...
       </div>
-    </div>
 
-    <!-- Patient List -->
-    <div v-else class="space-y-3">
-      <div
-        v-for="(visit, index) in pendingVisits"
-        :key="visit.id"
-        @click="openPatient(visit)"
-        class="group relative bg-white rounded-xl border-2 border-slate-200 hover:border-medical-400 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg animate-slide-up"
-        :style="{ animationDelay: `${index * 50}ms` }"
-      >
-        <div class="flex items-center justify-between">
-          <!-- Patient Info -->
-          <div class="flex items-center gap-4 flex-1">
-            <Avatar 
-              :name="visit.patient?.fullName || visit.patient?.name" 
-              size="lg"
-            />
-            <div class="flex-1">
-              <h3 class="text-lg font-bold text-slate-900 mb-1">
-                {{ visit.patient?.fullName || visit.patient?.name }}
-              </h3>
-              <p class="text-sm text-slate-600 mb-2">{{ visit.visitReason }}</p>
-              <div class="flex items-center gap-3 text-xs">
-                <div class="flex items-center gap-1 text-slate-500">
-                  <Clock class="w-3.5 h-3.5" />
-                  <span>{{ formatTime(visit.visitDate) }}</span>
-                </div>
-                <Badge :variant="getStatusVariant(visit.status)" dot>
-                  {{ visit.status.replace(/_/g, ' ') }}
-                </Badge>
-              </div>
+      <div v-else-if="visits.length === 0" class="p-12 text-center">
+        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <ClipboardList class="w-8 h-8 text-slate-400" />
+        </div>
+        <h3 class="text-lg font-bold text-slate-900">All Caught Up!</h3>
+        <p class="text-slate-500">You have no pending patients in your queue.</p>
+      </div>
+
+      <div v-else class="divide-y divide-slate-100">
+        <div 
+          v-for="visit in visits" 
+          :key="visit.id"
+          class="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4 group cursor-pointer"
+          @click="handleExamine(visit.patient.id)"
+        >
+          <div class="w-16 text-center">
+            <div class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full inline-block">
+               #{{ visit.id }}
             </div>
           </div>
 
-          <!-- Arrow Icon -->
-          <ChevronRight class="w-6 h-6 text-slate-400 group-hover:text-medical-600 group-hover:translate-x-1 transition-all duration-200" />
-        </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="text-base font-bold text-slate-900 truncate">{{ visit.patient.fullName }}</h3>
+              <span class="text-xs text-slate-400 font-mono">{{ visit.patient.pid }}</span>
+            </div>
+            <div class="flex items-center gap-4 text-sm text-slate-500">
+              <span class="flex items-center gap-1">
+                <AlertCircle class="w-4 h-4 text-rose-500" v-if="visit.visitReason.includes('Emergency')" />
+                {{ visit.visitReason }}
+              </span>
+              <span>•</span>
+              <span>{{ visit.patient.age }} Yrs / {{ visit.patient.gender }}</span>
+            </div>
+          </div>
 
-        <!-- Hover Glow Effect -->
-        <div class="absolute inset-0 rounded-xl bg-gradient-to-r from-medical-500/0 via-medical-500/5 to-medical-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          <div class="px-4">
+            <StatusBadge :status="visit.status" />
+          </div>
+
+          <div class="pr-4">
+            <button 
+              class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 flex items-center gap-2"
+            >
+              Examine <ArrowRight class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

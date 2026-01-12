@@ -4,16 +4,18 @@ import { prisma } from "../config/prisma.js";
 export interface PatientInput {
   name: string
   age: number
+  dob: Date
   issue: string
   since: string
   status?: PatientStatus
   fullName?: string
-  gender?: string
-  phone?: string
-  address?: string
-  bloodGroup?: string
+  gender: string
+  phone: string
+  address: string
+  bloodGroup: string
   allergies?: string
-  weight?: number
+  weight: number
+  height: number
 }
 
 export async function createPatient(data: PatientInput) {
@@ -25,6 +27,7 @@ export async function createPatient(data: PatientInput) {
     data: {
       name: data.name,
       age: data.age,
+      dob: data.dob,
       issue: data.issue,
       since: data.since,
       status: data.status ?? PatientStatus.ADMITTED,
@@ -34,8 +37,9 @@ export async function createPatient(data: PatientInput) {
       phone: data.phone,
       address: data.address,
       bloodGroup: data.bloodGroup,
-      allergies: data.allergies,
-      weight: data.weight
+      allergies: data.allergies ?? null,
+      weight: data.weight,
+      height: data.height
     },
   })
 }

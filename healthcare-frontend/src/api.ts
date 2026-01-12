@@ -1,165 +1,181 @@
-import type { Patient, AuthResponse, Visit, Surgery, TriageStats, Analytics } from './types'
-import { getAuthHeaders, saveAuth, clearAuth } from './utils/auth'
+// src/api.ts
+import axios from 'axios';
+import { getToken, saveAuth } from './utils/auth';
+import type { Patient, Visit, PatientFormData, AuthResponse, TriageStats, ReceptionDashboardData, DoctorStats } from './types';
 
-const API_BASE_URL = 'http://localhost:3000'
+// NOTE: Backend routes are mounted at root (e.g., /patients, /auth, /visits)
+// so we avoid an extra /api prefix to prevent 404s.
+const api = axios.create({
+  baseURL: 'http://localhost:3000',
+});
 
-// ============ Authentication ============
-export async function employeeLogin(employeeId: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/employee-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ employeeId, password }),
-  })
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Login failed')
-  }
+export const getReceptionDashboard = async (): Promise<ReceptionDashboardData> => {
+  const response = await api.get('/stats/reception-dashboard');
+  return response.data;
+};
 
-  const data = await response.json()
-  saveAuth(data.token, data.employee)
-  return data
-}
+// --- Authentication APIs ---
 
-export function logout(): void {
-  clearAuth()
-}
+export const employeeLogin = async (employeeId: string, password: string): Promise<AuthResponse> => {
+  const response = await api.post('/auth/employee-login', { employeeId, password });
+  const { token, employee } = response.data;
+  saveAuth(token, employee);
+  return response.data;
+};
 
-// ============ Patient Management ============
-export async function getPatients(): Promise<Patient[]> {
-  const response = await fetch(`${API_BASE_URL}/patients`, {
-    headers: getAuthHeaders(),
-  })
+export const registerEmployee = async (data: any): Promise<AuthResponse> => {
+  const response = await api.post('/auth/register', data);
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to fetch patients')
-  return response.json()
-}
+// --- Patient & Reception APIs ---
 
-export async function getPatientById(id: number): Promise<Patient> {
-  const response = await fetch(`${API_BASE_URL}/patients/${id}`, {
-    headers: getAuthHeaders(),
-  })
+// 1. Get All Patients (For Dashboard "Overlooking")
+export const getPatients = async (): Promise<Patient[]> => {
+  const response = await api.get('/patients');
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Patient not found')
-  return response.json()
-}
+// 2. Search Patient (For "Looking up" older records)
+export const searchPatientByPidOrPhone = async (query: string): Promise<Patient[]> => {
+  const response = await api.get(`/patients/search`, { params: { q: query } });
+  return response.data;
+};
 
-export async function searchPatientByPidOrPhone(query: string): Promise<Patient | null> {
-  const response = await fetch(`${API_BASE_URL}/patients/search?q=${encodeURIComponent(query)}`, {
-    headers: getAuthHeaders(),
-  })
+// 3. Create New Patient
+export const createPatient = async (data: PatientFormData): Promise<Patient> => {
+  const response = await api.post('/patients', data);
+  return response.data;
+};
 
-  if (!response.ok) return null
-  return response.json()
-}
-export async function createPatient(data: {
-  name: string
-  age: number
-  issue: string
-  since: string
-  fullName?: string
-  gender?: string
-  phone?: string
-  address?: string
-  bloodGroup?: string
-  allergies?: string
-  weight?: number
-}): Promise<Patient> {
-  const response = await fetch(`${API_BASE_URL}/patients`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  })
+// 4. Create Visit (For returning patients)
+export const createVisit = async (data: Partial<Visit>): Promise<Visit> => {
+  const response = await api.post('/visits', data);
+  return response.data;
+};
+// --- Reception APIs ---
 
-  if (!response.ok) throw new Error('Failed to create patient')
-  return response.json()
-}
+// Get Triage Stats (Active Patients, Doctors, ICU)
+export const getTriageStats = async (): Promise<TriageStats> => {
+  // Mock data for now, or fetch from backend
+  // const response = await api.get('/stats/triage');
+  // return response.data;
+  return {
+    activePatients: 42,
+    doctorsAvailable: 8,
+    icuOccupancy: 75
+  };
+};
 
-export async function deletePatient(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/patients/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
 
-  if (!response.ok) throw new Error('Failed to delete patient')
-}
+// --- Doctor APIs ---
 
-// ============ Visit Management ============
-export async function getVisitsByDoctor(doctorId: number): Promise<Visit[]> {
-  const response = await fetch(`${API_BASE_URL}/visits/doctor/${doctorId}`, {
-    headers: getAuthHeaders(),
-  })
+// 5. Get Doctor's Personal Stats
+// 5. Get Doctor's Personal Stats
+export const getDoctorStats = async (doctorId: number): Promise<DoctorStats> => {
+  const response = await api.get(`/stats/doctor/${doctorId}`);
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to fetch visits')
-  return response.json()
-}
+// 6. Get Doctor's Patient Queue (Active Visits)
+export const getDoctorQueue = async (doctorId: number) => {
+  const response = await api.get(`/visits/queue/${doctorId}`);
+  return response.data;
+};
 
-export async function createVisit(data: {
-  patientId: number
-  doctorId: number
-  visitReason: string
-  assignedWard?: string
-  notes?: string
-}): Promise<Visit> {
-  const response = await fetch(`${API_BASE_URL}/visits`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  })
+// 7. Get Full Patient Details (History + Vitals) for Examination
+export const getPatientDetails = async (patientId: number) => {
+  const response = await api.get(`/patients/${patientId}`);
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to create visit')
-  return response.json()
-}
+// 8. Get Single Visit
+export const getVisitById = async (visitId: number): Promise<Visit> => {
+  const response = await api.get(`/visits/${visitId}`);
+  return response.data;
+};
 
-export async function updateVisit(id: number, data: {
-  status?: string
-  assignedWard?: string
-  diagnosis?: string
-  prescription?: string
-  notes?: string
-}): Promise<Visit> {
-  const response = await fetch(`${API_BASE_URL}/visits/${id}`, {
-    method: 'PUT',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  })
+// 9. Update Visit (Diagnosis, Prescribe, Admit)
+export const updateVisit = async (visitId: number, data: any) => {
+  const response = await api.patch(`/visits/${visitId}`, data);
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to update visit')
-  return response.json()
-}
+// 9. Schedule Surgery
+export const scheduleSurgery = async (data: any) => {
+  const response = await api.post('/surgeries', data);
+  return response.data;
+};
 
-// ============ Surgery Management ============
-export async function createSurgery(data: {
-  patientId: number
-  doctorId: number
-  surgeryType: string
-  scheduledFor: string
-}): Promise<Surgery> {
-  const response = await fetch(`${API_BASE_URL}/surgeries`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  })
+// --- WORKFLOW APIs (Receptionist, Doctor, Nurse) ---
 
-  if (!response.ok) throw new Error('Failed to schedule surgery')
-  return response.json()
-}
+// Receptionist: Register new patient
+export const registerPatient = async (data: any) => {
+  const response = await api.post('/patients/register', data);
+  return response.data;
+};
 
-// ============ Statistics & Analytics ============
-export async function getTriageStats(): Promise<TriageStats> {
-  const response = await fetch(`${API_BASE_URL}/stats/triage`, {
-    headers: getAuthHeaders(),
-  })
+// Receptionist: Assign doctor to patient
+export const assignDoctorToPatient = async (patientId: number, doctorId: number) => {
+  const response = await api.put(`/patients/${patientId}/assign-doctor`, { doctorId });
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to fetch stats')
-  return response.json()
-}
+// Receptionist: Search patients
+export const searchPatients = async (query: string) => {
+  const response = await api.get('/patients/search', { params: { q: query } });
+  return response.data;
+};
 
-export async function getAnalytics(): Promise<Analytics> {
-  const response = await fetch(`${API_BASE_URL}/stats/analytics`, {
-    headers: getAuthHeaders(),
-  })
+// Doctor: Get patients assigned to doctor
+export const getDoctorAssignedPatients = async (doctorId: number) => {
+  const response = await api.get(`/patients/doctor/${doctorId}/patients`);
+  return response.data;
+};
 
-  if (!response.ok) throw new Error('Failed to fetch analytics')
-  return response.json()
-}
+// Doctor: Submit consultation
+export const submitConsultation = async (patientId: number, data: any) => {
+  const response = await api.put(`/patients/doctor/consultation/${patientId}`, data);
+  return response.data;
+};
+
+// Nurse: Get dashboard with all active patients
+export const getNurseDashboard = async () => {
+  const response = await api.get('/patients/nurse/dashboard');
+  return response.data;
+};
+
+// Nurse: Admit patient
+export const admitPatient = async (patientId: number) => {
+  const response = await api.put(`/patients/nurse/admit/${patientId}`);
+  return response.data;
+};
+
+// Nurse: Discharge patient
+export const dischargePatient = async (patientId: number) => {
+  const response = await api.put(`/patients/nurse/discharge/${patientId}`);
+  return response.data;
+};
+
+// ---- Legacy API stubs to keep existing views working ----
+
+export const getPatientById = async (patientId: number) => {
+  const response = await api.get(`/patients/${patientId}`);
+  return response.data;
+};
+
+export const getAnalytics = async () => {
+  const response = await api.get('/stats/analytics');
+  return response.data;
+};
+
+export const createSurgery = async (data: any) => {
+  const response = await api.post('/surgeries', data);
+  return response.data;
+};

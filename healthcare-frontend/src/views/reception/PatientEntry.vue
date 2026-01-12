@@ -1,410 +1,426 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { UserPlus, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-vue-next'
-import { createPatient, createVisit, searchPatientByPidOrPhone } from '@/api'
-import type { Patient } from '@/types'
+import { ref, onMounted, computed, watch } from 'vue';
+import { UserPlus, Search, Stethoscope, ClipboardPlus, History, Calendar, WeighingScale, Activity } from 'lucide-vue-next';
+import { createPatient, createVisit, searchPatientByPidOrPhone, getReceptionDashboard } from '@/api';
+import type { Employee } from '@/types';
+import { toast } from 'vue-sonner';
 
-const activeTab = ref<'new' | 'returning'>('new')
-const loading = ref(false)
-const success = ref('')
-const error = ref('')
+const activeTab = ref<'new' | 'returning'>('new');
+const loading = ref(false);
+const availableDoctors = ref<Employee[]>([]);
 
-// New Patient Form
-const newPatientForm = ref({
-  name: '',
+// -- NEW PATIENT STATE --
+const newForm = ref({
   fullName: '',
-  age: null as number | null,
+  dob: '',
   gender: '',
   phone: '',
   address: '',
   bloodGroup: '',
-  allergies: '',
   issue: '',
-  since: ''
-})
+  since: '',
+  doctorId: '',
+  weight: '',
+  height: '',
+  allergies: ''
+});
 
-// Returning Patient
-const searchQuery = ref('')
-const foundPatient = ref<Patient | null>(null)
-const searchLoading = ref(false)
-const returningVisitForm = ref({
-  visitReason: '',
-  notes: ''
-})
+const calculatedAge = ref<string>('');
 
-const resetMessages = () => {
-  success.value = ''
-  error.value = ''
-}
+// -- RETURNING PATIENT STATE --
+const searchQuery = ref('');
+const foundPatient = ref<any>(null);
+const returnForm = ref({ reason: '', notes: '', doctorId: '' });
 
-const handleNewPatient = async () => {
-  resetMessages()
+onMounted(async () => {
+  try {
+    const data = await getReceptionDashboard();
+    availableDoctors.value = data.availableDoctors;
+  } catch (err) {
+    console.error('Failed to load doctors', err);
+  }
+});
+
+// Watch DOB to calculate Age
+watch(() => newForm.value.dob, (newDob) => {
+  if (!newDob) {
+    calculatedAge.value = '';
+    return;
+  }
+  const birthDate = new Date(newDob);
+  const now = new Date();
   
-  if (!newPatientForm.value.name || !newPatientForm.value.age || !newPatientForm.value.issue) {
-    error.value = 'Please fill in all required fields'
-    return
+  let years = now.getFullYear() - birthDate.getFullYear();
+  let months = now.getMonth() - birthDate.getMonth();
+  let days = now.getDate() - birthDate.getDate();
+
+  if (days < 0) {
+    months--;
+    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  calculatedAge.value = `${years} Y, ${months} M, ${days} D`;
+});
+
+// Actions
+const handleRegister = async () => {
+  // Frontend Validation
+  if (newForm.value.phone.length !== 10 || isNaN(Number(newForm.value.phone))) {
+    toast.error('Phone number must be strictly 10 digits');
+    return;
+  }
+  if (!newForm.value.gender) {
+    toast.error('Please select a gender');
+    return;
+  }
+  
+  if (!newForm.value.doctorId) {
+    toast.error('Please assign a doctor');
+    return;
   }
 
-  loading.value = true
-  
+  loading.value = true;
   try {
     const patient = await createPatient({
-      name: newPatientForm.value.name,
-      fullName: newPatientForm.value.fullName || newPatientForm.value.name,
-      age: newPatientForm.value.age!,
-      gender: newPatientForm.value.gender,
-      phone: newPatientForm.value.phone,
-      address: newPatientForm.value.address,
-      bloodGroup: newPatientForm.value.bloodGroup,
-      allergies: newPatientForm.value.allergies,
-      issue: newPatientForm.value.issue,
-      since: newPatientForm.value.since
-    })
-
-    // Create initial visit
+      ...newForm.value,
+      name: newForm.value.fullName, // Backend expects 'name'
+      age: 0, // Backend calculates or ignores if logic updated, but we pass 0 or derived age. controller uses dob.
+      weight: Number(newForm.value.weight),
+      height: Number(newForm.value.height),
+      dob: new Date(newForm.value.dob).toISOString()
+    });
+    
+    // Create first visit
     await createVisit({
-        patientId: patient.id,
-        doctorId: 1, // Will be assigned later
-      visitReason: newPatientForm.value.issue,
-      notes: 'New patient registration'
-    })
+      patientId: patient.id,
+      doctorId: Number(newForm.value.doctorId),
+      visitReason: newForm.value.issue,
+      notes: 'Initial Registration - ' + newForm.value.since
+    });
 
-    success.value = `Patient registered successfully! PID: ${patient.pid || patient.id} (SMS sent)`
+    toast.success(`Registered: ${patient.pid}. SMS Sent.`);
     
     // Reset form
-    newPatientForm.value = {
-      name: '',
-      fullName: '',
-      age: null,
-      gender: '',
-      phone: '',
-      address: '',
-      bloodGroup: '',
-      allergies: '',
-      issue: '',
-      since: ''
-    }
+    newForm.value = { 
+      fullName: '', dob: '', gender: '', phone: '', address: '', 
+      bloodGroup: '', issue: '', since: '', doctorId: '', weight: '', height: '', allergies: '' 
+    };
+    calculatedAge.value = '';
   } catch (err: any) {
-    error.value = err.message || 'Failed to register patient'
+    toast.error(err.response?.data?.message || 'Registration failed');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const handleSearch = async () => {
-  if (!searchQuery.value) return
-
-  searchLoading.value = true
-  foundPatient.value = null
-  resetMessages()
-
+  if (!searchQuery.value) return;
+  loading.value = true;
+  foundPatient.value = null;
+  
   try {
-    const patient = await searchPatientByPidOrPhone(searchQuery.value)
-    if (patient) {
-      foundPatient.value = patient
-    } else {
-      error.value = 'No patient found with that PID or phone number'
-    }
-  } catch (err: any) {
-    error.value = err.message || 'Search failed'
+    const data = await searchPatientByPidOrPhone(searchQuery.value);
+    foundPatient.value = data;
+  } catch (err) {
+    toast.error('Patient not found. Check PID or Phone.');
   } finally {
-    searchLoading.value = false
+    loading.value = false;
   }
-}
+};
 
-const handleReturningVisit = async () => {
-  if (!foundPatient.value || !returningVisitForm.value.visitReason) {
-    error.value = 'Please provide visit reason'
-    return
+const handleReturnVisit = async () => {
+  if (!returnForm.value.reason || !returnForm.value.doctorId) {
+    toast.error('Please fill reason and assign a doctor');
+    return;
   }
-
-  loading.value = true
-  resetMessages()
-
+  loading.value = true;
   try {
     await createVisit({
       patientId: foundPatient.value.id,
-      doctorId: 1, // Will be assigned
-      visitReason: returningVisitForm.value.visitReason,
-      notes: returningVisitForm.value.notes
-    })
-
-    success.value = 'Visit created successfully!'
-    
-    // Reset
-    searchQuery.value = ''
-    foundPatient.value = null
-    returningVisitForm.value = { visitReason: '', notes: '' }
-  } catch (err: any) {
-    error.value = err.message || 'Failed to create visit'
+      doctorId: Number(returnForm.value.doctorId),
+      visitReason: returnForm.value.reason,
+      notes: returnForm.value.notes
+    });
+    toast.success('New visit added to patient record');
+    returnForm.value = { reason: '', notes: '', doctorId: '' };
+    handleSearch(); // Refresh history
+  } catch (err) {
+    toast.error('Failed to add visit');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Header -->
-    <div>
-      <h1 class="text-3xl font-bold text-slate-900 mb-2">Patient Entry</h1>
-      <p class="text-slate-600">Register new or returning patients</p>
+  <div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-slate-900">Patient Intake</h1>
+        <p class="text-slate-500">Register new patients or create returning visits</p>
+      </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="flex border-b border-slate-200">
-        <button
-          @click="activeTab = 'new'; resetMessages()"
-          :class="[
-            'flex-1 px-6 py-4 font-semibold transition-colors',
-            activeTab === 'new'
-              ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
-              : 'text-slate-600 hover:bg-slate-50'
-          ]"
-        >
-          <div class="flex items-center justify-center gap-2">
-            <UserPlus class="w-5 h-5" />
-            <span>New Patient</span>
-          </div>
-        </button>
-        <button
-          @click="activeTab = 'returning'; resetMessages()"
-          :class="[
-            'flex-1 px-6 py-4 font-semibold transition-colors',
-            activeTab === 'returning'
-              ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
-              : 'text-slate-600 hover:bg-slate-50'
-          ]"
-        >
-          <div class="flex items-center justify-center gap-2">
-            <Search class="w-5 h-5" />
-            <span>Returning Patient</span>
-          </div>
-        </button>
+    <div class="bg-white p-1 rounded-xl border border-slate-200 inline-flex shadow-sm">
+      <button 
+        @click="activeTab = 'new'"
+        :class="['px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2', 
+          activeTab === 'new' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50']"
+      >
+        <UserPlus class="w-4 h-4" /> New Registration
+      </button>
+      <button 
+        @click="activeTab = 'returning'"
+        :class="['px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2', 
+          activeTab === 'returning' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50']"
+      >
+        <Search class="w-4 h-4" /> Look Up / Returning
+      </button>
+    </div>
+
+    <!-- NEW REGISTRATION FORM -->
+    <div v-show="activeTab === 'new'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in relative">
+      <div class="p-8 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <UserPlus class="w-5 h-5 text-indigo-600" /> New Patient Form
+        </h3>
       </div>
+      
+      <form @submit.prevent="handleRegister" class="p-8 grid grid-cols-1 md:grid-cols-12 gap-6">
+        
+        <!-- PERSONAL DETAILS -->
+        <div class="md:col-span-12">
+           <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wide border-b pb-2 mb-4 text-indigo-900">Personal Details</h4>
+        </div>
 
-      <!-- Messages -->
-      <div v-if="success" class="m-6 rounded-lg bg-emerald-50 border border-emerald-200 p-4 flex items-start gap-3">
-        <CheckCircle class="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-        <p class="text-sm text-emerald-800 font-medium">{{ success }}</p>
-      </div>
+        <div class="md:col-span-4">
+           <label class="label-std">Name of the Patient <span class="req">*</span></label>
+           <input v-model="newForm.fullName" required class="input-std uppercase" placeholder="NAME OF THE PATIENT" />
+        </div>
 
-      <div v-if="error" class="m-6 rounded-lg bg-rose-50 border border-rose-200 p-4 flex items-start gap-3">
-        <AlertCircle class="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
-        <p class="text-sm text-rose-800 font-medium">{{ error }}</p>
-      </div>
+        <div class="md:col-span-3">
+          <label class="label-std">Date of Birth <span class="req">*</span></label>
+          <input v-model="newForm.dob" type="date" required class="input-std" />
+          <p v-if="calculatedAge" class="text-xs font-bold text-indigo-600 mt-1 bg-indigo-50 px-2 py-1 rounded inline-block">
+             Age: {{ calculatedAge }}
+          </p>
+        </div>
 
-      <!-- New Patient Form -->
-      <div v-if="activeTab === 'new'" class="p-6">
-        <form @submit.prevent="handleNewPatient" class="space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">
-                Name <span class="text-rose-500">*</span>
-              </label>
-              <input
-                v-model="newPatientForm.name"
-                type="text"
-                required
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+        <div class="md:col-span-2">
+          <label class="label-std">Gender <span class="req">*</span></label>
+          <select v-model="newForm.gender" required class="input-std">
+            <option value="" disabled selected>Select</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Trans</option>
+            <option>Preferred not to say</option>
+          </select>
+        </div>
 
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">
-                Age <span class="text-rose-500">*</span>
-              </label>
-              <input
-                v-model.number="newPatientForm.age"
-                type="number"
-                required
-                min="0"
-                max="150"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+        <div class="md:col-span-3">
+           <label class="label-std">Phone Number <span class="req">*</span></label>
+           <input v-model="newForm.phone" required class="input-std" placeholder="10-digit mobile" maxlength="10" pattern="\d{10}" title="10 digit mobile number" />
+        </div>
 
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Gender</label>
-              <select
-                v-model="newPatientForm.gender"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+        <div class="md:col-span-8">
+           <label class="label-std">Address <span class="req">*</span></label>
+           <input v-model="newForm.address" required class="input-std" placeholder="Complete residential address" />
+        </div>
+        
+        <div class="md:col-span-4">
+           <label class="label-std">Blood Group <span class="req">*</span></label>
+           <input v-model="newForm.bloodGroup" required class="input-std uppercase" placeholder="e.g. O+" />
+        </div>
+
+        <!-- CLINICAL INFO -->
+        <div class="md:col-span-12 mt-4">
+           <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wide border-b pb-2 mb-4 text-indigo-900">Clinical Info</h4>
+        </div>
+
+        <div class="md:col-span-6">
+           <label class="label-std">Chief Complaint (Health Issue) <span class="req">*</span></label>
+           <div class="relative">
+             <input v-model="newForm.issue" required class="input-std pl-10" placeholder="Main symptom or reason for visit" />
+             <Activity class="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+           </div>
+        </div>
+
+         <div class="md:col-span-3">
+             <label class="label-std">Symptoms Since <span class="req">*</span></label>
+             <input v-model="newForm.since" required class="input-std" placeholder="e.g. 2 days" />
+        </div>
+
+        <div class="md:col-span-3">
+             <label class="label-std">Allergies</label>
+             <input v-model="newForm.allergies" class="input-std" placeholder="Optional" />
+        </div>
+
+        <div class="md:col-span-2">
+             <label class="label-std">Weight (kg) <span class="req">*</span></label>
+             <input v-model="newForm.weight" type="number" required class="input-std" placeholder="kg" />
+        </div>
+
+        <div class="md:col-span-2">
+             <label class="label-std">Height (cm) <span class="req">*</span></label>
+             <input v-model="newForm.height" type="number" required class="input-std" placeholder="cm" />
+        </div>
+
+        <!-- ASSIGNMENT -->
+        <div class="md:col-span-8">
+           <label class="label-std">Assign Doctor <span class="req">*</span></label>
+            <div class="relative">
+              <select v-model="newForm.doctorId" required class="input-std pl-10 appearance-none bg-white">
+                <option value="" disabled selected>Select Physician</option>
+                <option v-for="doc in availableDoctors" :key="doc.id" :value="doc.id">
+                  Dr. {{ doc.fullName }} ({{ doc.department || 'General' }})
+                </option>
               </select>
+              <Stethoscope class="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
             </div>
+            <p v-if="availableDoctors.length === 0" class="text-xs text-rose-500 mt-1">No doctors currently marked available.</p>
+        </div>
 
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Phone</label>
-              <input
-                v-model="newPatientForm.phone"
-                type="tel"
-                placeholder="9876543210"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+        <div class="md:col-span-12 mt-6 pt-6 border-t border-slate-100 flex justify-end">
+             <button :disabled="loading" class="btn-primary w-full md:w-auto min-w-[200px]">
+               {{ loading ? 'Registering...' : 'Complete Registration' }}
+             </button>
+        </div>
 
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Blood Group</label>
-              <select
-                v-model="newPatientForm.bloodGroup"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Select</option>
-                <option>A+</option>
-                <option>A-</option>
-                <option>B+</option>
-                <option>B-</option>
-                <option>AB+</option>
-                <option>AB-</option>
-                <option>O+</option>
-                <option>O-</option>
-              </select>
-            </div>
+      </form>
+    </div>
 
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Allergies</label>
-              <input
-                v-model="newPatientForm.allergies"
-                type="text"
-                placeholder="None"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div class="md:col-span-2">
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Address</label>
-              <input
-                v-model="newPatientForm.address"
-                type="text"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">
-                Chief Complaint <span class="text-rose-500">*</span>
-              </label>
-              <input
-                v-model="newPatientForm.issue"
-                type="text"
-                required
-                placeholder="e.g., Chest pain"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Duration</label>
-              <input
-                v-model="newPatientForm.since"
-                type="text"
-                placeholder="e.g., 3 days"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            :disabled="loading"
-            class="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-          >
-            <Loader2 v-if="loading" class="w-5 h-5 animate-spin" />
-            <span>{{ loading ? 'Registering...' : 'Register Patient' }}</span>
-          </button>
-        </form>
-      </div>
-
-      <!-- Returning Patient Search -->
-      <div v-else class="p-6 space-y-6">
-        <div>
-          <label class="block text-sm font-semibold text-slate-900 mb-2">
-            Search by PID or Phone Number
-          </label>
-          <div class="flex gap-3">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="P-1001 or 9876543210"
-              class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+    <!-- RETURNING PATIENT FORM -->
+    <div v-show="activeTab === 'returning'" class="bg-white rounded-xl border border-slate-200 shadow-sm min-h-[500px] animate-fade-in">
+       
+       <!-- Search Bar -->
+       <div class="p-8 border-b border-slate-100 max-w-2xl mx-auto text-center space-y-4">
+          <h3 class="text-lg font-bold text-slate-900">Find Patient Record</h3>
+          <div class="relative">
+            <input 
+              v-model="searchQuery" 
               @keyup.enter="handleSearch"
+              placeholder="Search by PID (e.g. P-1001) or Phone" 
+              class="w-full pl-12 pr-24 py-4 rounded-xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-indigo-500 text-lg transition-all"
             />
-            <button
-              @click="handleSearch"
-              :disabled="searchLoading || !searchQuery"
-              class="px-6 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all flex items-center gap-2"
-            >
-              <Loader2 v-if="searchLoading" class="w-5 h-5 animate-spin" />
-              <Search v-else class="w-5 h-5" />
-              <span>Search</span>
+            <Search class="w-6 h-6 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <button @click="handleSearch" class="absolute right-2 top-2 bottom-2 px-5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
+              Search
             </button>
           </div>
-        </div>
+       </div>
 
-        <!-- Patient Found -->
-        <div v-if="foundPatient" class="space-y-6">
-          <div class="bg-slate-50 rounded-lg border border-slate-200 p-6">
-            <h3 class="font-bold text-slate-900 mb-4">Patient History</h3>
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span class="text-slate-600">Name:</span>
-                <span class="ml-2 font-semibold text-slate-900">{{ foundPatient.fullName || foundPatient.name }}</span>
-              </div>
-              <div>
-                <span class="text-slate-600">Age:</span>
-                <span class="ml-2 font-semibold text-slate-900">{{ foundPatient.age }}</span>
-              </div>
-              <div>
-                <span class="text-slate-600">Blood Group:</span>
-                <span class="ml-2 font-semibold text-slate-900">{{ foundPatient.bloodGroup || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="text-slate-600">Phone:</span>
-                <span class="ml-2 font-semibold text-slate-900">{{ foundPatient.phone || 'N/A' }}</span>
-              </div>
+       <!-- Patient Found View -->
+       <div v-if="foundPatient" class="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-50/50">
+          
+          <!-- Sidebar: Patient Card -->
+          <div class="lg:col-span-4 space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center gap-4 mb-6">
+                  <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-indigo-200">
+                    {{ foundPatient.name.charAt(0) }}
+                  </div>
+                  <div>
+                    <h2 class="text-xl font-bold text-slate-900">{{ foundPatient.fullName || foundPatient.name }}</h2>
+                    <p class="font-mono text-sm text-slate-500 tracking-wide">{{ foundPatient.pid }}</p>
+                  </div>
+                </div>
+                <div class="space-y-3 text-sm border-t border-slate-100 pt-4">
+                   <div class="flex justify-between border-b border-slate-50 pb-2">
+                     <span class="text-slate-500">Age / Gender</span> 
+                     <span class="font-medium text-slate-900">{{ foundPatient.age }} / {{ foundPatient.gender }}</span>
+                   </div>
+                   <div class="flex justify-between border-b border-slate-50 pb-2">
+                     <span class="text-slate-500">Contact</span> 
+                     <span class="font-medium text-slate-900">{{ foundPatient.phone }}</span>
+                   </div>
+                   <div class="flex justify-between">
+                     <span class="text-slate-500">Blood Group</span> 
+                     <span class="font-medium text-slate-900">{{ foundPatient.bloodGroup || 'N/A' }}</span>
+                   </div>
+                </div>
             </div>
           </div>
 
-          <form @submit.prevent="handleReturningVisit" class="space-y-4">
-            <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">
-                Visit Reason <span class="text-rose-500">*</span>
-              </label>
-              <input
-                v-model="returningVisitForm.visitReason"
-                type="text"
-                required
-                placeholder="e.g., Follow-up checkup"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+          <!-- Main: New Visit & History -->
+          <div class="lg:col-span-8 space-y-8">
+            
+            <!-- Create Visit Form -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+               <h4 class="font-bold text-slate-900 mb-6 flex items-center gap-2">
+                 <ClipboardPlus class="w-5 h-5 text-indigo-600" /> Create New Visit
+               </h4>
+               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                 <div>
+                   <label class="label-std">Reason for Visit</label>
+                   <input v-model="returnForm.reason" placeholder="e.g. Follow-up, Fever" class="input-std" />
+                 </div>
+                 <div>
+                   <label class="label-std">Assign Doctor</label>
+                   <div class="relative">
+                      <select v-model="returnForm.doctorId" class="input-std pl-10 appearance-none bg-white">
+                        <option value="" disabled selected>Select Physician</option>
+                        <option v-for="doc in availableDoctors" :key="doc.id" :value="doc.id">
+                          Dr. {{ doc.fullName }}
+                        </option>
+                      </select>
+                      <Stethoscope class="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+                   </div>
+                 </div>
+                 <div class="md:col-span-2 flex justify-end">
+                   <button @click="handleReturnVisit" :disabled="loading" class="btn-primary w-full md:w-auto">
+                     {{ loading ? 'Processing...' : 'Confirm Check-In' }}
+                   </button>
+                 </div>
+               </div>
             </div>
 
+            <!-- History List -->
             <div>
-              <label class="block text-sm font-semibold text-slate-900 mb-2">Notes</label>
-              <textarea
-                v-model="returningVisitForm.notes"
-                rows="3"
-                placeholder="Additional notes (BP, Weight, etc.)"
-                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+              <h4 class="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <History class="w-5 h-5 text-slate-400" /> Previous Visits
+              </h4>
+              <div class="space-y-3">
+                 <div v-if="!foundPatient.visits || foundPatient.visits.length === 0" class="text-slate-400 italic text-sm">
+                   No patient history found.
+                 </div>
+                 <div v-for="visit in foundPatient.visits" :key="visit.id" class="flex gap-4 p-4 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 transition-colors">
+                   <div class="text-center min-w-[50px] pr-4 border-r border-slate-100">
+                     <div class="text-xs font-bold text-slate-400 uppercase">{{ new Date(visit.visitDate).toLocaleString('default', { month: 'short' }) }}</div>
+                     <div class="text-xl font-bold text-slate-900">{{ new Date(visit.visitDate).getDate() }}</div>
+                   </div>
+                   <div class="flex-1">
+                     <p class="font-bold text-slate-900">{{ visit.visitReason }}</p>
+                     <p class="text-sm text-slate-500">Dr. {{ visit.doctor?.fullName || 'Unassigned' }}</p>
+                   </div>
+                   <div>
+                     <span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium">{{ visit.status }}</span>
+                   </div>
+                 </div>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              :disabled="loading"
-              class="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-            >
-              <Loader2 v-if="loading" class="w-5 h-5 animate-spin" />
-              <span>{{ loading ? 'Creating Visit...' : 'Create Visit' }}</span>
-            </button>
-          </form>
-        </div>
-      </div>
+          </div>
+       </div>
     </div>
+
   </div>
 </template>
+
+<style scoped>
+.label-std {
+  @apply block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider;
+}
+.req {
+  @apply text-rose-500;
+}
+.input-std {
+  @apply w-full px-4 py-3 rounded-lg border border-slate-300 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-slate-900 placeholder:text-slate-400 transition-all shadow-sm;
+}
+.btn-primary {
+  @apply px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all;
+}
+</style>

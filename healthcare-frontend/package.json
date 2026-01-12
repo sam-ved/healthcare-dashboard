@@ -13,6 +13,7 @@
   "dependencies": {
     "@vueuse/core": "^14.1.0",
     "@vueuse/motion": "^3.0.3",
+    "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "framer-motion": "^12.25.0",
     "lucide-vue-next": "^0.562.0",
@@ -28,10 +29,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.7.3",
-    "vite": "npm:rolldown-vite@7.2.5",
+    "vite": "^6.0.1",
     "vue-tsc": "^2.2.0"
-  },
-  "overrides": {
-    "vite": "npm:rolldown-vite@7.2.5"
   }
 }

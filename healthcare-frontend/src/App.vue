@@ -1,7 +1,9 @@
 <script setup lang="ts">
-// Router-based navigation - all views are in separate route components
+// The router view handles all layout switching
 </script>
 
 <template>
-  <router-view />
+  <div class="h-full w-full font-sans antialiased text-slate-900 bg-slate-50">
+    <router-view />
+  </div>
 </template>

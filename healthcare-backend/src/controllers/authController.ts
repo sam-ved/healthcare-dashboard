@@ -1,14 +1,16 @@
 import type { Request, Response } from "express";
-import { loginUser, registerUser } from "../services/authService.js";
+import { loginEmployee, registerEmployee } from "../services/authService.js";
 
 export async function register(req: Request, res: Response) {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "Name, email, and password are required" });
+  // role is required now
+  const { fullName, email, mobile, password, role, department } = req.body;
+  
+  if (!fullName || !email || !mobile || !password || !role) {
+    return res.status(400).json({ message: "Full Name, email, mobile, password, and role are required" });
   }
 
   try {
-    const result = await registerUser(name, email, password);
+    const result = await registerEmployee({ fullName, email, mobile, password, role, department });
     return res.status(201).json(result);
   } catch (err) {
     return res.status(400).json({ message: (err as Error).message });
@@ -16,13 +18,15 @@ export async function register(req: Request, res: Response) {
 }
 
 export async function login(req: Request, res: Response) {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
+  // identifier can be email, mobile, or employeeId
+  const { identifier, password } = req.body;
+  
+  if (!identifier || !password) {
+    return res.status(400).json({ message: "Identifier (Email/Mobile/ID) and password are required" });
   }
 
   try {
-    const result = await loginUser(email, password);
+    const result = await loginEmployee(identifier, password);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(400).json({ message: (err as Error).message });

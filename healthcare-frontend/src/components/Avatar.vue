@@ -54,7 +54,7 @@ const gradientClass = computed(() => {
 
 <template>
   <div 
-    class="relative inline-flex items-center justify-center rounded-full font-semibold text-white ring-2 ring-white shadow-sm"
+    class="relative inline-flex items-center justify-center rounded-full font-bold text-white ring-2 ring-white shadow-sm leading-none"
     :class="[sizeClasses, gradientClass]"
   >
     <img 

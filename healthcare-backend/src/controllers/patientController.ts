@@ -8,30 +8,47 @@ import {
   togglePatientStatus,
 } from "../services/patientService.js"
 
+import { sendRegistrationSMS } from "../services/smsService.js"
+
 export async function createPatientHandler(req: AuthRequest, res: Response) {
-  const { name, age, issue, since, fullName, gender, phone, address, bloodGroup, allergies, weight } = req.body
+  const { name, dob, issue, since, fullName, gender, phone, address, bloodGroup, allergies, weight, height } = req.body as Record<string, string | number | undefined>
   
-  if (!name || !age || !issue) {
-    return res.status(400).json({ message: "name, age, and issue are required" })
+  if (!name || !dob || !issue || !phone || !gender || !address || !bloodGroup || !weight || !height) {
+    return res.status(400).json({ message: "All mandatory fields (Name, DOB, Phone, Gender, Address, Blood Group, Weight, Height, Issue) are required." })
   }
+
+  // Calculate Age from DOB
+  const birthDate = new Date(dob);
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear(); // Approximate age for summary
 
   try {
     const patient = await createPatient({ 
-      name, 
-      age: Number(age), 
-      issue, 
-      since: since || 'Today',
-      fullName,
-      gender,
-      phone,
-      address,
-      bloodGroup,
-      allergies,
-      ...(weight && { weight: Number(weight) })
+      name: String(name), 
+      age, 
+      dob: new Date(dob),
+      issue: String(issue), 
+      since: String(since || 'Today'),
+      fullName: String(fullName),
+      gender: String(gender),
+      phone: String(phone),
+      address: String(address),
+      bloodGroup: String(bloodGroup),
+      allergies: allergies ? String(allergies) : undefined,
+      weight: Number(weight),
+      height: Number(height)
     })
+
+    // Send SMS
+    await sendRegistrationSMS(patient.fullName, patient.pid, String(patient.phone)).catch(console.error);
+
     return res.status(201).json(patient)
-  } catch (err) {
-    return res.status(400).json({ message: (err as Error).message })
+  } catch (err: any) {
+    // Check for unique constraint violation (P2002)
+    if (err.code === 'P2002' && err.meta?.target?.includes('phone')) {
+      return res.status(400).json({ message: "Phone number already registered with another patient." })
+    }
+    return res.status(400).json({ message: err.message })
   }
 }
 

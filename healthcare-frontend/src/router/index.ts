@@ -9,6 +9,23 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/views/Register.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/dashboard',
+    redirect: () => {
+      if (!isAuthenticated()) return '/login'
+      const role = getUserRole()
+      if (role === 'DOCTOR') return '/doctor/dashboard'
+      if (role === 'NURSE' || role === 'WARDBOY' || role === 'RECEPTIONIST') return '/reception/dashboard'
+      if (role === 'ADMIN') return '/admin/analytics'
+      return '/login'
+    }
+  },
+  {
     path: '/doctor',
     component: () => import('@/layouts/DoctorLayout.vue'),
     meta: { requiresAuth: true, allowedRoles: ['DOCTOR'] },
@@ -24,6 +41,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/doctor/Queue.vue')
       },
       {
+        path: 'consultation/:visitId',
+        name: 'Consultation',
+        component: () => import('@/views/doctor/Consultation.vue')
+      },
+      {
         path: 'patient/:id',
         name: 'PatientExaminer',
         component: () => import('@/views/doctor/PatientExaminer.vue')
@@ -33,7 +55,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reception',
     component: () => import('@/layouts/ReceptionLayout.vue'),
-    meta: { requiresAuth: true, allowedRoles: ['NURSE', 'WARDBOY'] },
+    meta: { requiresAuth: true, allowedRoles: ['NURSE', 'WARDBOY', 'RECEPTIONIST'] },
     children: [
       {
         path: 'dashboard',
@@ -75,10 +97,14 @@ const routes: RouteRecordRaw[] = [
       if (!isAuthenticated()) return '/login'
       const role = getUserRole()
       if (role === 'DOCTOR') return '/doctor/dashboard'
-      if (role === 'NURSE' || role === 'WARDBOY') return '/reception/dashboard'
+      if (role === 'NURSE' || role === 'WARDBOY' || role === 'RECEPTIONIST') return '/reception/dashboard'
       if (role === 'ADMIN') return '/admin/analytics'
       return '/login'
     }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/login'
   }
 ]
 
@@ -100,7 +126,7 @@ router.beforeEach((to, _, next) => {
   if (to.path === '/login' && authenticated) {
     const role = getUserRole()
     if (role === 'DOCTOR') next('/doctor/dashboard')
-    else if (role === 'NURSE' || role === 'WARDBOY') next('/reception/dashboard')
+    else if (role === 'NURSE' || role === 'WARDBOY' || role === 'RECEPTIONIST') next('/reception/dashboard')
     else if (role === 'ADMIN') next('/admin/analytics')
     else next()
     return
