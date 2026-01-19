@@ -62,6 +62,7 @@ export interface Surgery {
 export interface PatientFormData {
   name: string
   age: number | null
+  dob?: string
   issue: string
   since: string
   fullName?: string
@@ -71,6 +72,7 @@ export interface PatientFormData {
   bloodGroup?: string
   allergies?: string
   weight?: number
+  height?: number
 }
 
 export interface TriageStats {

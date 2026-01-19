@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Sidebar from '@/components/Sidebar.vue'
+import ChatWidget from '@/components/ChatWidget.vue'
 </script>
 
 <template>
@@ -10,5 +11,6 @@ import Sidebar from '@/components/Sidebar.vue'
          <router-view />
       </div>
     </main>
+    <ChatWidget />
   </div>
 </template>

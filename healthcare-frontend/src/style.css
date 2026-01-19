@@ -27,7 +27,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden; /* Prevent body scroll, let specific layouts handle scroll */
+  overflow: auto; /* Enable scrolling */
 }
 
 /* FIX: The default Vite styles centered this ID. We allow it to fill the screen. */

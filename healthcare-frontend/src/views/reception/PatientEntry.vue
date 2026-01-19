@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { UserPlus, Search, Stethoscope, ClipboardPlus, History, Calendar, WeighingScale, Activity } from 'lucide-vue-next';
+import { ref, onMounted, watch } from 'vue';
+import { UserPlus, Search, Stethoscope, ClipboardPlus, History, Activity, CheckCircle2, Loader2 } from 'lucide-vue-next';
 import { createPatient, createVisit, searchPatientByPidOrPhone, getReceptionDashboard } from '@/api';
 import type { Employee } from '@/types';
 import { toast } from 'vue-sonner';
 
 const activeTab = ref<'new' | 'returning'>('new');
 const loading = ref(false);
+const showSuccessAnimation = ref(false);
+const registeredPatientInfo = ref<{ pid: string; name: string } | null>(null);
 const availableDoctors = ref<Employee[]>([]);
 
 // -- NEW PATIENT STATE --
@@ -85,31 +87,46 @@ const handleRegister = async () => {
 
   loading.value = true;
   try {
-    const patient = await createPatient({
-      ...newForm.value,
-      name: newForm.value.fullName, // Backend expects 'name'
-      age: 0, // Backend calculates or ignores if logic updated, but we pass 0 or derived age. controller uses dob.
+    const patientData: any = {
+      name: newForm.value.fullName,
+      fullName: newForm.value.fullName,
+      age: 0,
+      dob: new Date(newForm.value.dob).toISOString(),
+      gender: newForm.value.gender,
+      phone: newForm.value.phone,
+      address: newForm.value.address,
+      bloodGroup: newForm.value.bloodGroup,
+      issue: newForm.value.issue,
+      since: newForm.value.since,
       weight: Number(newForm.value.weight),
       height: Number(newForm.value.height),
-      dob: new Date(newForm.value.dob).toISOString()
-    });
-    
-    // Create first visit
-    await createVisit({
-      patientId: patient.id,
-      doctorId: Number(newForm.value.doctorId),
-      visitReason: newForm.value.issue,
-      notes: 'Initial Registration - ' + newForm.value.since
-    });
-
-    toast.success(`Registered: ${patient.pid}. SMS Sent.`);
-    
-    // Reset form
-    newForm.value = { 
-      fullName: '', dob: '', gender: '', phone: '', address: '', 
-      bloodGroup: '', issue: '', since: '', doctorId: '', weight: '', height: '', allergies: '' 
+      allergies: newForm.value.allergies
     };
-    calculatedAge.value = '';
+    
+    const patient = await createPatient(patientData);
+    
+    // NO AUTO-ADMISSION TO WARD - Just register the patient
+    // Patient is now marked as REGISTERED (not ADMITTED)
+    
+    // Show success animation
+    registeredPatientInfo.value = {
+      pid: patient.pid,
+      name: patient.fullName || patient.name
+    };
+    showSuccessAnimation.value = true;
+    
+    // Auto-hide success and reset after delay
+    setTimeout(() => {
+      showSuccessAnimation.value = false;
+      registeredPatientInfo.value = null;
+      
+      // Reset form
+      newForm.value = { 
+        fullName: '', dob: '', gender: '', phone: '', address: '', 
+        bloodGroup: '', issue: '', since: '', doctorId: '', weight: '', height: '', allergies: '' 
+      };
+      calculatedAge.value = '';
+    }, 3500);
   } catch (err: any) {
     toast.error(err.response?.data?.message || 'Registration failed');
   } finally {
@@ -194,7 +211,7 @@ const handleReturnVisit = async () => {
         
         <!-- PERSONAL DETAILS -->
         <div class="md:col-span-12">
-           <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wide border-b pb-2 mb-4 text-indigo-900">Personal Details</h4>
+           <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wide border-b pb-2 mb-4">Personal Details</h4>
         </div>
 
         <div class="md:col-span-4">
@@ -238,7 +255,7 @@ const handleReturnVisit = async () => {
 
         <!-- CLINICAL INFO -->
         <div class="md:col-span-12 mt-4">
-           <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wide border-b pb-2 mb-4 text-indigo-900">Clinical Info</h4>
+           <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wide border-b pb-2 mb-4">Clinical Info</h4>
         </div>
 
         <div class="md:col-span-6">
@@ -285,12 +302,68 @@ const handleReturnVisit = async () => {
         </div>
 
         <div class="md:col-span-12 mt-6 pt-6 border-t border-slate-100 flex justify-end">
-             <button :disabled="loading" class="btn-primary w-full md:w-auto min-w-[200px]">
-               {{ loading ? 'Registering...' : 'Complete Registration' }}
+             <button 
+               type="submit"
+               :disabled="loading" 
+               class="btn-primary w-full md:w-auto min-w-[200px] relative overflow-hidden group disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300"
+             >
+               <span v-if="loading" class="flex items-center gap-2 justify-center">
+                 <Loader2 class="w-5 h-5 animate-spin" />
+                 Registering...
+               </span>
+               <span v-else class="flex items-center gap-2 justify-center">
+                 <UserPlus class="w-5 h-5" />
+                 Complete Registration
+               </span>
              </button>
         </div>
 
       </form>
+      
+      <!-- Success Animation Overlay -->
+      <transition
+        enter-active-class="transition-all duration-500 ease-out"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition-all duration-300 ease-in"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
+      >
+        <div 
+          v-if="showSuccessAnimation" 
+          class="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex items-center justify-center"
+        >
+          <div class="text-center space-y-6 p-8 max-w-md">
+            <!-- Animated Check Circle -->
+            <div class="relative inline-block">
+              <div class="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/40 animate-bounce-once">
+                <CheckCircle2 class="w-14 h-14 text-white animate-scale-in" />
+              </div>
+              <!-- Pulse Rings -->
+              <div class="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-20"></div>
+            </div>
+            
+            <!-- Success Message -->
+            <div class="space-y-3">
+              <h3 class="text-2xl font-bold text-slate-900">Patient Registered Successfully!</h3>
+              <div class="bg-gradient-to-r from-blue-50 to-green-50 border border-green-200 rounded-xl p-4">
+                <p class="text-sm text-slate-600 mb-1">Patient ID</p>
+                <p class="text-xl font-mono font-bold text-green-700">{{ registeredPatientInfo?.pid }}</p>
+              </div>
+              <p class="text-slate-600">
+                {{ registeredPatientInfo?.name }} has been registered.<br/>
+                <span class="text-sm text-slate-500">SMS notification sent to patient.</span>
+              </p>
+            </div>
+            
+            <!-- Progress indicator -->
+            <div class="flex items-center justify-center gap-2 text-sm text-slate-500">
+              <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              Returning to registration form...
+            </div>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- RETURNING PATIENT FORM -->
@@ -422,5 +495,37 @@ const handleReturnVisit = async () => {
 }
 .btn-primary {
   @apply px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all;
+}
+
+/* Success Animation */
+@keyframes bounce-once {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-20px) scale(1.05);
+  }
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-once {
+  animation: bounce-once 0.8s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.6s ease-out;
 }
 </style>

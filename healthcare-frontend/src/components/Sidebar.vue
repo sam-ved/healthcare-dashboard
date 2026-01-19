@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { LayoutDashboard, Users, Stethoscope, Bed, BarChart3, LogOut, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { LayoutDashboard, Users, Stethoscope, Bed, LogOut, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { getEmployee, clearAuth } from '@/utils/auth'
 import Avatar from './Avatar.vue'
 

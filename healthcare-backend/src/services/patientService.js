@@ -8,17 +8,19 @@ export async function createPatient(data) {
         data: {
             name: data.name,
             age: data.age,
+            dob: data.dob,
             issue: data.issue,
             since: data.since,
             status: data.status ?? PatientStatus.ADMITTED,
             pid,
             fullName: data.fullName || data.name,
-            gender: data.gender ?? null,
-            phone: data.phone ?? null,
-            address: data.address ?? null,
-            bloodGroup: data.bloodGroup ?? null,
+            gender: data.gender,
+            phone: data.phone,
+            address: data.address,
+            bloodGroup: data.bloodGroup,
             allergies: data.allergies ?? null,
-            weight: data.weight ?? null
+            weight: data.weight,
+            height: data.height
         },
     });
 }

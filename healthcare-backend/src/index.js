@@ -9,6 +9,7 @@ import visitRoutes from "./routes/visitRoutes.js";
 import surgeryRoutes from "./routes/surgeryRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
 import workflowRoutes from "./routes/workflowRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 const app = express();
 app.use(helmet());
 app.use(cors());
@@ -20,6 +21,7 @@ app.use("/", patientRoutes);
 app.use("/visits", visitRoutes);
 app.use("/surgeries", surgeryRoutes);
 app.use("/stats", statsRoutes);
+app.use("/api/chat", chatRoutes);
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 app.listen(env.PORT, () => {
     console.log(`API running on port ${env.PORT}`);

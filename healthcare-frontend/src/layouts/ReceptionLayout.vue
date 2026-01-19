@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Sidebar from '@/components/Sidebar.vue'
+import ChatWidget from '@/components/ChatWidget.vue'
 import { getUserRole } from '@/utils/auth'
 
 const role = getUserRole() as 'NURSE' | 'WARDBOY'
@@ -13,5 +14,6 @@ const role = getUserRole() as 'NURSE' | 'WARDBOY'
          <router-view />
       </div>
     </main>
+    <ChatWidget />
   </div>
 </template>

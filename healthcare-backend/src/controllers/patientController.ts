@@ -34,7 +34,7 @@ export async function createPatientHandler(req: AuthRequest, res: Response) {
       phone: String(phone),
       address: String(address),
       bloodGroup: String(bloodGroup),
-      allergies: allergies ? String(allergies) : undefined,
+      ...(allergies && { allergies: String(allergies) }),
       weight: Number(weight),
       height: Number(height)
     })
